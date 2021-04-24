@@ -108,3 +108,6 @@ dist
 #local mac files
 .DS_Store
 package-lock.json
+
+#sqlite
+.sqlite
