@@ -2,6 +2,7 @@ import { io } from "../http"
 import { ConnectionsService } from "../services/ConnectionsService"
 import { UsersService } from "../services/UsersService"
 import { MessagesService } from "../services/MessagesService"
+import { request } from 'express'
 
 interface IParams {
     text: string
@@ -9,7 +10,7 @@ interface IParams {
 }
 
 io.on("connect", (socket) => {
-    const connectionService = new ConnectionsService()
+    const connectionsService = new ConnectionsService()
     const usersService = new UsersService()
     const messagesService = new MessagesService()
 
@@ -24,7 +25,7 @@ io.on("connect", (socket) => {
         if (!userExists) {
             const user = await usersService.create(email)
 
-            await connectionService.create({
+            await connectionsService.create({
                 socket_id,
                 user_id: user.id
             })
@@ -33,17 +34,17 @@ io.on("connect", (socket) => {
         } else {
             user_id = userExists.id
 
-            const connection = await connectionService.findByUserId(userExists.id)
+            const connection = await connectionsService.findByUserId(userExists.id)
 
             if (!connection) {
-                await connectionService.create({
+                await connectionsService.create({
                     socket_id,
                     user_id: userExists.id
                 })
             } else {
                 connection.socket_id = socket_id
                 
-                await connectionService.create(connection)
+                await connectionsService.create(connection)
             }
         }
 
@@ -55,5 +56,26 @@ io.on("connect", (socket) => {
         const allMessages = await messagesService.listByUser(user_id)
 
         socket.emit("client_list_all_messages", allMessages)
+
+        const allUsers = await connectionsService.findAllWithoutAdmin()
+        io.emit("admin_list_all_users", allUsers)
+    })
+
+    socket.on("client_send_to_admin", async (params) => {
+        const { text, socket_admin_id } = params
+
+        const socket_id = socket.id
+
+        const { user_id } = await connectionsService.findBySocketID(socket_id)
+
+        const message = await messagesService.create({
+            text,
+            user_id
+        })
+
+        io.to(socket_admin_id).emit("admin_receive_message", {
+            message,
+            socket_id
+        })
     })
 })
